@@ -4,7 +4,7 @@ Setup is about 15 minutes, once. After that everything is plain English to your 
 
 You need: Claude Desktop (or Cursor) and [Node.js LTS](https://nodejs.org/) installed. Nothing else.
 
-Before you start, read the "What this kit is not" section of `README.md`. Short version: plates, VINs, and gate codes stay on your computer; ZenSched only ever sees a site label, an address, and a Job Report with before/after photos. No customer signature pad.
+Before you start, read the "What this kit is not" section of `README.md`. Short version: plates, VINs, gate codes, and your retail customers' names stay on your computer; ZenSched only ever sees a site label (street + city, or a fleet's business name), an address, and a Job Report with before/after photos. No customer signature pad, and the paint-meter field is a note from your own gauge, not a certified thickness report.
 
 ## 1. Make a data folder
 

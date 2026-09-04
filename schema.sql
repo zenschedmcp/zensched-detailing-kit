@@ -26,8 +26,9 @@
 --
 -- PRIVACY: vehicle plates, VINs, gate / garage codes, and parking notes live
 -- ONLY in this file on your computer: vehicles.plate, vehicles.vin,
--- sites.access_notes, sites.parking_notes. ZenSched receives a site label
--- (customer + city, or "Nguyen - Maple Ave"), the street address for the
+-- sites.access_notes, sites.parking_notes; retail customers' names stay in
+-- customers. ZenSched receives a site label ("Maple Ave - University Place"
+-- for a driveway, "Cascade Plumbing - Kent" for a business lot), the street address for the
 -- GPS pin, an event title made of the package and job number (or
 -- "Detailing - <site_label>" for a fleet lot), and the Job Report the
 -- detailer fills in on the phone. SKILL.md forbids the agent from putting
@@ -110,7 +111,7 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS sites (
   site_id INTEGER PRIMARY KEY AUTOINCREMENT,
   customer_id INTEGER NOT NULL,
-  site_label TEXT,                                  -- sent to ZenSched: 'Nguyen - Maple Ave', 'Acme Fleet - Kent'
+  site_label TEXT,                                  -- sent to ZenSched: 'Maple Ave - University Place' (driveway), 'Acme Fleet - Kent' (lot); never a homeowner's name
   site_kind TEXT NOT NULL DEFAULT 'driveway'
     CHECK (site_kind IN ('driveway', 'lot', 'shop', 'dealership', 'other')),
   event_mode TEXT NOT NULL DEFAULT 'one_off'

@@ -14,7 +14,8 @@ If you *are* a developer, skip to [For developers](#for-developers).
 
 - **Not a shop management suite.** No bay calendar, no parts inventory, no ceramic-warranty register, no customer portal. If you need those, this kit is the dispatch-and-proof layer next to whatever you already use.
 - **Not a signed customer acceptance.** The Job Report has no signature pad, on purpose: on ZenSched a signature field replaces the Submit button, and a signature on an ops form is not a customer sign-off on paint work. After photos are the proof.
-- **ZenSched never receives plates, VINs, or gate codes.** Those live only in the local database. ZenSched sees a site label (`Shah - Maple Ave`, `Cascade Plumbing - Kent`), the street address for the GPS pin, an event title made of the package and job number (or `Detailing - <lot>` for a fleet), and the Job Report.
+- **Not a paint-thickness certificate or coating warranty.** The paint-meter field is a number the detailer types from their own gauge. It is not calibrated, verified, or certified by ZenSched, and it is not a condition report or a manufacturer's coating warranty. Do not present it to a customer as one.
+- **ZenSched never receives plates, VINs, gate codes, or retail customers' names.** Those live only in the local database. ZenSched sees a site label (`Maple Ave - University Place` for a driveway, `Cascade Plumbing - Kent` for a business lot), the street address for the GPS pin, an event title made of the package and job number (or `Detailing - <lot>` for a fleet), and the Job Report.
 
 If any of that is a deal-breaker, this kit is not for you. If you want a phone schedule with GPS proof, before/after photos, and receivables you can chase, read on.
 
@@ -44,7 +45,7 @@ If any of that is a deal-breaker, this kit is not for you. If you want a phone s
 
 ### Privacy note
 
-Plates, VINs, gate codes, and garage-opener locations live only in `vehicles.plate`, `vehicles.vin`, `sites.access_notes`, and `sites.parking_notes`. `SKILL.md` forbids the AI from putting any of them into any ZenSched field, including location names, event titles, notes, and cancellation reasons. You are still responsible for your own privacy obligations on the local database; this kit narrows what a third party sees.
+Plates, VINs, gate codes, and garage-opener locations live only in `vehicles.plate`, `vehicles.vin`, `sites.access_notes`, and `sites.parking_notes`; retail customers' names and phone numbers live only in `customers`. `SKILL.md` forbids the AI from putting any of them into any ZenSched field, including location names, event titles, notes, and cancellation reasons. A driveway's `site_label` is street + city, never the homeowner's name; a fleet lot may carry the business name. You are still responsible for your own privacy obligations on the local database; this kit narrows what a third party sees.
 
 ## How it works day to day
 
@@ -191,7 +192,7 @@ In solo mode you invite yourself; the email arrives at your own address, you ins
 | Check-in not GPS-verified at a garage / fleet lot | You parked outside the policy radius, or the pin is on the road | "Set the check-in radius to 200 m" (`policy_update`, **not** on the location), or "move the pin to the lot entrance" (`location_update`, free) |
 | App would not let me check in 15 minutes early | Early check-in window too small | "Allow check-in 20 minutes before the shift" (`checkin_slack_min`) |
 | Forgot to check out | Shift still `checked_in` | Tell the AI the real time; ask for a 15-minute check-out reminder |
-| Job Report not on the phone | Form not assigned to that job's event before the shift was created | "Attach the Job Report to J-2026-0004" (`form_assign`), then cancel and recreate the shift |
+| Job Report not on the phone | Form was never assigned to that job's event | "Attach the Job Report to J-2026-0004" (`form_assign(form_id, event_id=...)`). It installs on the existing shift; do not cancel and recreate it |
 | Fleet shifts fail a couple of months out | The lot's 60-day ZenSched event has expired | "Renew the Cascade event"; the AI rolls a new window |
 | On-demand job moved to another day fails on `shift_update` | On-demand events are single-day | The AI cancels the shift and creates a new job (`rescheduled_from`) with its own event |
 | AI refuses to put a plate or gate code in ZenSched | Working as intended | Give it to the detailer directly |
@@ -208,7 +209,7 @@ If something is confusing or broken in ZenSched itself, ask the AI to call `feed
 
 - **Hybrid of the notary (one-off) and pet-care (recurring) kits.** `jobs` is the driving table for both shapes. On-demand retail is one job → one single-day `event_create` (`idempotency_key="event-job-{job_id}"`) → one `shift_create` (`shift-job-{job_id}`), with `form_assign` in between. Recurring fleet is a `job_schedule` weekday mask (Monday first) expanded by `fleet_due_this_week` into job rows, then shifts on a **per-site** event rolled every ≤60 days (`event-site-{site_id}-{YYYYMMDD}`). Never one event per van.
 - **`sites.event_mode`** is `one_off` (driveway / shop retail) or `rolling` (fleet lot / dealership). `jobs_upcoming.event_needs_roll` is 1 only for rolling sites whose `event_valid_until` is missing or earlier than the job date. `events_expiring` lists rolling sites with an active schedule whose window ends within 14 days.
-- **`sites` is an address de-dup cache per customer.** `UNIQUE (customer_id, normalized_address)`; the agent normalizes (lowercase, strip `,` `.` `#`, collapse whitespace, include city/state/zip) and looks it up before any `location_create`. Two customers may share an address string (an apartment garage). `site_label` is the only name sent to ZenSched.
+- **`sites` is an address de-dup cache per customer.** `UNIQUE (customer_id, normalized_address)`; the agent normalizes (lowercase, strip `,` `.` `#`, collapse whitespace, include city/state/zip) and looks it up before any `location_create`. Two customers may share an address string (an apartment garage). `site_label` is the only name sent to ZenSched: `<street> - <city>` for a retail driveway (no house number, no homeowner name), `<business> - <city> lot` for a fleet.
 - **Customers → vehicles / sites → jobs.** A retail customer has a driveway site and one or more vehicles. A fleet customer has a lot and many vehicles pinned to it (`vehicles.site_id`). A job always has `site_id` (where you stand) and usually `vehicle_id` (what you work on).
 - **`job_no`** is assigned by trigger as `J-{YYYY of scheduled_start}-{job_id:04d}` when left NULL. Invoice numbers are `{prefix}-{YYYY}-{invoice_id:04d}`.
 - **`scheduled_start` is local wall-clock time without an offset** (`2026-09-12T10:00`, `CHECK`-constrained to reject a trailing offset or `Z`). Day-based views use `date('now', 'localtime')` because the SQLite MCP server runs on the owner's computer. `date('now')` would be UTC and would roll "today" over at 4–5 pm Pacific.
@@ -220,14 +221,14 @@ If something is confusing or broken in ZenSched itself, ask the AI to call `feed
 - **The check-in radius is policy-enforced.** `location_create(checkin_radius_m=...)` is informational; widen with `policy_update(0, '{"checkin_radius_m": N}')`. Fleet lots should start at 150–300 m.
 - `jobs.zensched_shift_id`, `detailers.zensched_worker_id`, `payouts.job_id`, and `sites(customer_id, normalized_address)` are `UNIQUE`. `PRAGMA foreign_keys = ON` is in `schema.sql` and `SKILL.md` tells the agent to run it per session. Deleting a customer cascades to sites, vehicles, schedules, jobs, invoices, and payouts; `sites` is `ON DELETE RESTRICT` while jobs reference it; deleting a vehicle sets `jobs.vehicle_id` NULL; deleting a detailer sets `jobs.detailer_id` NULL and removes their payouts.
 
-**Job Report form.** Created once with `form_create(title, fields_json, idempotency_key="form-job-report")`; the exact `fields_json` is in `SKILL.md` and `example-workflow.md` (byte-identical) and was validated against ZenSched's `_validate_fields`. Every field carries an explicit `identifier` so submission `data` keys are stable (`package`, `paint_meter`, `photo_before`, `photo_after`, `addons`, `upsell`, `notes`; section `sec_job`). Option keys are derived by ZenSched from the labels (lowercase, non-alphanumerics → `_`, truncated at 30 characters); every option here is well under 30 characters. Attaching is `form_assign(form_id, event_id=...)` per event.
+**Job Report form.** Created once with `form_create(title, fields_json, idempotency_key="form-job-report")`; the exact `fields_json` is in `SKILL.md` and `example-workflow.md` (byte-identical) and was validated against ZenSched's `_validate_fields`. Every field carries an explicit `identifier` so submission `data` keys are stable (`package`, `paint_meter`, `photo_before`, `photo_after`, `addons`, `upsell`, `notes`; section `sec_job`). Option keys are derived by ZenSched from the labels (lowercase, non-alphanumerics → `_`, truncated at 30 characters); every option here is well under 30 characters. Attaching is `form_assign(form_id, event_id=...)` per event; it also installs the form on shifts that already exist on that event, so a forgotten assignment never requires cancelling a shift.
 
 **Idempotency keys.** Deterministic, derived from local IDs:
 
 - location: `loc-site-{site_id}`
 - event (on-demand): `event-job-{job_id}`
 - event (fleet roll): `event-site-{site_id}-{YYYYMMDD window start}`
-- shift: `shift-job-{job_id}` (a detailer swap appends `-2`)
+- shift: `shift-job-{job_id}` for the first shift; every later shift on the same job (detailer swap, fleet reschedule to another day) appends `-2`, `-3`, ... so a cancelled shift's key is never reused within ZenSched's 24-hour replay window
 - assignment: `assign-job-report-{event_id}`
 - cancel: `cancel-shift-{shift_id}`
 - worker: `worker-{email}`

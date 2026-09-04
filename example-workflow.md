@@ -2,7 +2,7 @@
 
 This shows the exact tool calls the agent makes for a first week of operation, following `SKILL.md`. The owner only types the quoted lines; everything else is the agent's work. Assumes setup from `QUICKSTART.md` is complete (both MCP servers configured, `schema.sql` loaded, `SKILL.md` given as instructions).
 
-The business is **Harbor Shine Mobile Detail**, a solo-plus-one shop (Jordan Hale, owner; later Luis as a contractor) in Tacoma, Washington, Pacific time (`-07:00` in September). IDs and responses are illustrative. ZenSched IDs are integers. Watch what does **not** cross to ZenSched: plates, VINs, gate codes. ZenSched sees `Shah - Maple Ave`, a street address, `Full detail J-2026-0001`, `Detailing - Cascade Plumbing - Kent`, and a Job Report.
+The business is **Harbor Shine Mobile Detail**, a solo-plus-one shop (Jordan Hale, owner; later Luis as a contractor) in Tacoma, Washington, Pacific time (`-07:00` in September). IDs and responses are illustrative. ZenSched IDs are integers. Watch what does **not** cross to ZenSched: plates, VINs, gate codes, and the retail customer's name. ZenSched sees `Maple Ave - University Place`, a street address, `Full detail J-2026-0001`, `Detailing - Cascade Plumbing - Kent` (a business name is fine), and a Job Report.
 
 ## Session start (every session)
 
@@ -93,7 +93,7 @@ policy_update:
 
 ## "Priya Shah wants a full detail Saturday Sep 12 at 10 at 4412 Maple Ave, University Place WA 98466. 2019 Honda CR-V, white, plate ABC1234. Gate 4412. Book it."
 
-The agent parses: retail customer, full package, Saturday 10:00, driveway, CR-V, plate and gate **local only**.
+The agent parses: retail customer, full package, Saturday 10:00, driveway, CR-V; name, plate, and gate **local only**.
 
 ```
 sqlite_query: SELECT package_id, default_minutes, price FROM packages WHERE code = 'full';  → 3, 150, 175.00
@@ -109,7 +109,7 @@ sqlite_query: SELECT site_id, zensched_location_id FROM sites
 
 sqlite_execute:
   INSERT INTO sites (customer_id, site_label, site_kind, event_mode, normalized_address, address, city, state, zip, access_notes)
-  VALUES (1, 'Shah - Maple Ave', 'driveway', 'one_off', '4412 maple ave university place wa 98466',
+  VALUES (1, 'Maple Ave - University Place', 'driveway', 'one_off', '4412 maple ave university place wa 98466',
           '4412 Maple Ave', 'University Place', 'WA', '98466', 'Gate 4412');
   → lastInsertRowid = 1
 
@@ -131,7 +131,7 @@ sqlite_query:
          loc_idempotency_key, event_idempotency_key, shift_idempotency_key
   FROM jobs_upcoming WHERE job_id = 1;
   → J-2026-0001 | 2026-09-12T10:00:00-07:00 | 2026-09-12T12:30:00-07:00
-    | Shah - Maple Ave | Full detail J-2026-0001
+    | Maple Ave - University Place | Full detail J-2026-0001
     | 4412 Maple Ave, University Place, WA 98466 | one_off | needs_location 1 | event_needs_roll 0
     | worker 701 | loc-site-1 | event-job-1 | shift-job-1
 ```
@@ -142,7 +142,7 @@ Owner: *"yes"*
 
 ```
 location_create:
-  name: "Shah - Maple Ave"
+  name: "Maple Ave - University Place"
   street_address: "4412 Maple Ave, University Place, WA 98466"
   checkin_radius_m: 100
   idempotency_key: "loc-site-1"
@@ -176,9 +176,9 @@ shift_create:
 sqlite_execute: UPDATE jobs SET zensched_event_id = 8101, zensched_shift_id = 99101 WHERE job_id = 1;
 ```
 
-Nothing about the plate, VIN, or gate code is in `name`, `title`, or `notes`.
+Nothing about Priya's name, the plate, VIN, or gate code is in `name`, `title`, or `notes`.
 
-> Booked **J-2026-0001**: full detail, Priya's 2019 CR-V, Sat Sep 12 10:00–12:30 at Maple Ave, University Place. $175, net 14. It's on your phone with the Job Report attached. Plate and gate code stay on your computer.
+> Booked **J-2026-0001**: full detail, Priya's 2019 CR-V, Sat Sep 12 10:00–12:30 at Maple Ave, University Place. $175, net 14. It's on your phone with the Job Report attached. Her name, plate, and gate code stay on your computer.
 
 ## "Add Cascade Plumbing as a fleet, net 30. Kent lot 8804 84th Ave S, Kent 98032. Three vans — Van 1 Ford Transit, Van 2 Chevy Express, Van 3 Ram Promaster. Every Tuesday 8 am, fleet wash $25. Gate 8804."
 
@@ -331,7 +331,7 @@ sqlite_execute:
   WHERE job_id = 1;
 ```
 
-> Closed 4 jobs. Cascade Kent: three fleet washes, GPS on the lot, $75 receivable net 30. **J-2026-0001** Priya: full detail, paint meter 4.2 mils, after photos on file, $40 pet hair + $25 wax. $240 receivable net 14. GPS 10:04–12:18, 9 m from the pin.
+> Closed 4 jobs. Cascade Kent: three fleet washes, GPS on the lot, $75 receivable net 30. **J-2026-0001** Priya: full detail, paint meter 4.2 mils as read off your gauge (a note for your records, not a certified thickness report), after photos on file, $40 pet hair + $25 wax. $240 receivable net 14. GPS 10:04–12:18, 9 m from the pin.
 
 ## "Invoice Priya and Cascade."
 
@@ -418,9 +418,9 @@ sqlite_query: SELECT * FROM no_show_evidence WHERE job_id = 1;
 | Thing | Where | Why |
 |---|---|---|
 | Plates, VINs, gate codes | SQLite **only** (`vehicles.plate`, `vehicles.vin`, `sites.access_notes`) | Never reach ZenSched |
-| Priya, Cascade: terms, trip fee, billing email | SQLite (`customers`) | Billing |
+| Priya's name and phone; Priya, Cascade: terms, trip fee, billing email | SQLite (`customers`) | Billing; retail names never reach ZenSched |
 | Each driveway / lot, normalized, with its location id and `event_mode` | SQLite (`sites`) | De-dup cache; rolling vs one-off |
-| `Shah - Maple Ave`, `Cascade Plumbing - Kent` and their GPS pins | ZenSched (ID in `sites`) | Geofenced check-in; labels carry no plate |
+| `Maple Ave - University Place`, `Cascade Plumbing - Kent` and their GPS pins | ZenSched (ID in `sites`) | Geofenced check-in; labels carry no plate and no homeowner name |
 | One single-day event per on-demand job (`Full detail J-2026-0001`) | ZenSched (ID in `jobs`) | Title is package + number only |
 | One rolling ≤60-day event per fleet lot (`Detailing - Cascade Plumbing - Kent`) | ZenSched (ID in `sites`) | All vans that week share it |
 | One shift per job | ZenSched (ID in `jobs`) | Live schedule; never copied |
